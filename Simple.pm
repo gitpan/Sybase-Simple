@@ -1,5 +1,5 @@
 #
-# $Id: Simple.pm,v 1.3 2000/05/14 23:36:53 mpeppler Exp $
+# $Id: Simple.pm,v 1.4 2001/03/12 18:23:11 mpeppler Exp $
 #
 # Copyright (c) 1998-2000   Michael Peppler
 #
@@ -22,7 +22,7 @@ use Sybase::CTlib qw(:DEFAULT !ct_callback);
 
 @ISA = qw(Exporter AutoLoader Sybase::CTlib);
 @EXPORT = @Sybase::CTlib::EXPORT;
-$VERSION = '0.51';
+$VERSION = '0.52';
 
 my %CallBacks;
 
@@ -225,9 +225,40 @@ sub ArrayOfScalar {
 	}
 	
 	# fetch one row as an array
-	while (my $d = $self->ct_fetch(1,1)) {
+	while (my $d = $self->ct_fetch(0,1)) {
 	    # we're only interested in the first column of each result set
 		push(@$ret, $$d[0]);
+	}
+    }
+
+    $ret;
+}
+
+sub ArrayOfArray {
+    my $self = shift;
+    my $sql  = shift;
+
+    $self->cleanError;
+
+    $self->{SIMPLE}->{SQL} = $sql;
+
+    my $restype;
+    my $data;
+    my $ret = [];
+    $self->ct_execute($sql) == CS_SUCCEED || return undef;
+    while($self->ct_results($restype) == CS_SUCCEED) {
+	next unless $self->ct_fetchable($restype);
+	if($restype == CS_STATUS_RESULT) {
+	    # We don't want to include the status result (the return xxx)
+	    # from a stored procedure in the array of hashes that we return.
+	    while(my $d = $self->ct_fetch(0,1)) {
+	    }
+	    next;
+	}
+	# fetch one row as a hash
+	while($data = $self->ct_fetch(0, 1)) {
+	    # push the results onto an array
+	    push(@$ret, [@$data]);
 	}
     }
 
@@ -608,6 +639,11 @@ Execute the SQL in $sql, and return the first row, in hash format:
 
 Execute the SQL in $sql, and return an array of all the rows, each row
 begin stored in hash format. Similar to the Sybase::CTlib ct_sql() subroutine.
+
+=item $data = $dbh->ArrayOfArray($sql)
+
+Execute the SQL in $sql, and return an array of all the rows, each row
+begin stored in array format. Similar to the Sybase::CTlib ct_sql() subroutine.
 
 =item $data = $dbh->HashOfScalar($sql, $key, $val)
 
