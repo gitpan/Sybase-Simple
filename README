@@ -1,4 +1,4 @@
-$Id: README,v 1.2 1999/11/25 00:41:47 mpeppler Exp $
+$Id: README,v 1.3 2000/05/14 23:37:04 mpeppler Exp $
 
 This is an add-on module for Sybase::CTlib (which is part of the
 sybperl distribution) and which makes writing perl scripts using
@@ -16,9 +16,12 @@ To install:
 
 perl Makefile.PL
 make
-<edit test.pl to set appropriate userid/password/server values in the
-"new" call>
 make test
+
+NOTE: When running the test script Sybase::Simple needs access to a 
+Sybase server. You can specify the server, username and password in the 
+environment by setting $DSQUERY, $SYBASE_USER and $SYBASE_PWD, or you
+can edit the PWD file and set the UID, PWD and SRV variables.
 
 If all went well, run make install to place this module in the regular 
 perl library directory.

@@ -1,7 +1,7 @@
 #
-# $Id: Simple.pm,v 1.2 1999/11/25 00:41:55 mpeppler Exp $
+# $Id: Simple.pm,v 1.3 2000/05/14 23:36:53 mpeppler Exp $
 #
-# Copyright (c) 1998-1999   Michael Peppler
+# Copyright (c) 1998-2000   Michael Peppler
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the Perl README file,
@@ -18,11 +18,11 @@ require Exporter;
 require AutoLoader;
 
 use Carp;
-use Sybase::CTlib;
+use Sybase::CTlib qw(:DEFAULT !ct_callback);
 
 @ISA = qw(Exporter AutoLoader Sybase::CTlib);
 @EXPORT = @Sybase::CTlib::EXPORT;
-$VERSION = '0.50';
+$VERSION = '0.51';
 
 my %CallBacks;
 
@@ -102,6 +102,10 @@ sub new {
 
     $hash->{SIMPLE} = {%simple};
 
+    # Avoid warnings.
+    $pwd     ||= '';
+    $server  ||= '';
+    $appname ||= '';
     my $dbh = $package->SUPER::new($user, $pwd, $server, $appname, $hash);
 
     $dbh;
@@ -197,6 +201,37 @@ sub HashRow {
     }
 
     \%data;
+}
+
+sub ArrayOfScalar {
+    my $self = shift;
+    my $sql  = shift;
+    
+    $self->cleanError;
+    
+    $self->{SIMPLE}->{SQL} = $sql;
+    
+    my $restype;
+    my $ret = [];
+    $self->ct_execute($sql) == CS_SUCCEED || return undef;
+    while($self->ct_results($restype) == CS_SUCCEED) {
+	next unless $self->ct_fetchable($restype);
+	if($restype == CS_STATUS_RESULT) {
+	    # We don't want to include the status result (the return xxx)
+	    # from a stored procedure in the array of hashes that we return.
+	    while(my $d = $self->ct_fetch(0,1)) {
+	    }
+	    next;
+	}
+	
+	# fetch one row as an array
+	while (my $d = $self->ct_fetch(1,1)) {
+	    # we're only interested in the first column of each result set
+		push(@$ret, $$d[0]);
+	}
+    }
+
+    $ret;
 }
 
 sub ArrayOfHash {
@@ -362,7 +397,7 @@ sub HashOfHashOfHash {
     $ret;
 }
 
-# Exec some SQL, and ignore any returned rows. Usefull for insert/delete/update
+# Exec some SQL, and ignore any returned rows. Useful for insert/delete/update
 # or stored procs that perform those kinds of operations.
 # If the AbortOnError config parameter is non-0 then the batch is 
 # aborted on the first error.
@@ -451,7 +486,7 @@ sub HashIter {
     }
     return undef if($ret != CS_SUCCEED); # no fetchable rows in the query!
 
-    $iter->{LastResType} = $restype; # remeber what the last ct_results()
+    $iter->{LastResType} = $restype; # remember what the last ct_results()
 				# $restype was
 
     # "bless" the $iter variable into the Sybase::Simple::HashIter package
@@ -469,7 +504,7 @@ sub next {
 
  loop: {
 	%data = $self->{Handle}->ct_fetch(CS_TRUE);
-	if(!defined(%data) || keys(%data) == 0) {
+	if(keys(%data) == 0) {
 	    # no more data in this result set - so check if there is another
 	    # one...
 	    while($self->{Handle}->ct_results($restype) == CS_SUCCEED) {
@@ -592,10 +627,21 @@ $key column then the last row retrieved will be stored.
 
 Same as HashOfScalar(), except that the entire row is stored as a hash.
 
+=item $data = $dbh->HashOfHashOfHash($sql, $key1, $key2)
+
+Same as HashOfHash(), except that it expects a two column primary key. 
+So if you have a table with for example 'authorId' and 'bookId' as the
+primary key, you could do this:
+
+    my $data = $dbh->HashOfHashOfHash("select * from books", 'authorId', 'bookId')
+    my $book = $data->{1234}->{567};
+
+Now $book is the row where authorId == 1234 and bookId == 567.
+
 =item $iter = $dbh->HashIter($sql);
 
 Executes $sql, and returns a Sybase::Simple::HashIter object. This can then be used 
-to retrieve one row at a time. This is really usefull for queries where the
+to retrieve one row at a time. This is really useful for queries where the
 number of rows returned can be large.
 
     $iter = $dbh->HashIter($sql);
@@ -606,7 +652,7 @@ number of rows returned can be large.
 =item $status = $dbh->ExecSql($sql)
 
 Executes $sql and ignores any rows that the statement may return. This routine
-is usefull for executing insert/update/delete statements, or stored procedures
+is useful for executing insert/update/delete statements, or stored procedures
 that perform those types of operation.
 
 If $abortOnError is non-0 then B<ExecSql> will abort on the first failed 

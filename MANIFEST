@@ -1,6 +1,7 @@
 Changes
 MANIFEST
 Makefile.PL
+PWD
 README
 Simple.pm
-test.pl
+t/main.t
