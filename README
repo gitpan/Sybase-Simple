@@ -1,0 +1,30 @@
+$Id: README,v 1.2 1999/11/25 00:41:47 mpeppler Exp $
+
+This is an add-on module for Sybase::CTlib (which is part of the
+sybperl distribution) and which makes writing perl scripts using
+Sybase a little easier, by defining higher level calls such as 
+Scalar(), HashRow(), ExecSql(), etc.
+
+When using this module it is usually not necessary to really understand
+the Sybase API, as it makes sure that ct_results() is called the correct
+number of times, and that all the data rows are fetched, for example.
+
+As Sybase::Simple is sub-classed from Sybase::CTlib all the regular
+API calls are still available for advanced operations.
+
+To install:
+
+perl Makefile.PL
+make
+<edit test.pl to set appropriate userid/password/server values in the
+"new" call>
+make test
+
+If all went well, run make install to place this module in the regular 
+perl library directory.
+
+
+Comments, questions and bug fixes are welcome!
+
+Michael Peppler (mpeppler@peppler.org)
+
