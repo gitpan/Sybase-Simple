@@ -1,5 +1,5 @@
 #
-# $Id: Simple.pm,v 1.7 2001/12/13 01:36:04 mpeppler Exp $
+# $Id: Simple.pm,v 1.8 2003/12/23 19:10:15 mpeppler Exp $
 #
 # Copyright (c) 1998-2001   Michael Peppler
 #
@@ -20,7 +20,7 @@ use Sybase::CTlib qw(:DEFAULT !ct_callback);
 
 @ISA = qw(Exporter AutoLoader Sybase::CTlib);
 @EXPORT = @Sybase::CTlib::EXPORT;
-$VERSION = '0.54';
+$VERSION = '0.56';
 
 my %CallBacks;
 
@@ -150,12 +150,24 @@ sub Scalar {
 
     my $restype;
     my @data;
+    my $status = 0;
     $self->ct_execute($sql) == CS_SUCCEED || return undef;
     while($self->ct_results($restype) == CS_SUCCEED) {
 	next unless $self->ct_fetchable($restype);
+	if($restype == CS_STATUS_RESULT) {
+	    while(my @d = $self->ct_fetch) {
+		$status = $d[0];
+	    }
+	    next;
+	}
 	@data = $self->ct_fetch;
 	# we're only interested in the first row of the first result set
 	$self->ct_cancel(CS_CANCEL_ALL);
+    }
+
+    if($status != 0) {
+	$self->{SIMPLE}->{STATUS} = $status;
+	return undef;
     }
 
     $data[0];
@@ -199,6 +211,46 @@ sub HashRow {
     }
 
     \%data;
+}
+
+sub ArrayRow {
+    my $self = shift;
+    my $sql  = shift;
+
+    $self->cleanError;
+
+    $self->{SIMPLE}->{SQL} = $sql;
+
+    my $restype;
+    my @data;
+    my $seen;
+    $self->ct_execute($sql) == CS_SUCCEED || return undef;
+    while($self->ct_results($restype) == CS_SUCCEED) {
+	next unless $self->ct_fetchable($restype);
+	if($restype == CS_STATUS_RESULT) {
+	    # This means that we've executed a stored proc, and the first
+	    # result is the status result. This *probably* means that
+	    # the proc didn't return any rows
+	    while(my $d = $self->ct_fetch(0,1)) {
+		;
+	    }
+	    next;
+	}
+	while(my $d = $self->ct_fetch(0, 1)) {
+	    if(!$seen) {
+		# fetch one row as a hash
+		@data = @$d;
+		$seen = 1;
+	    }
+	}
+	# we're only interested in the first row of the first result set
+	# we can't use ct_cancel() here because the a stored proc
+	# might call a raiserror *after( the first SELECT, and we
+	# still want the error handlers to catch the raiserror!
+#	$self->ct_cancel(CS_CANCEL_ALL);
+    }
+
+    \@data;
 }
 
 sub ArrayOfScalar {
@@ -285,9 +337,16 @@ sub ArrayOfHash {
 	    next;
 	}
 	# fetch one row as a hash
-	while(%data = $self->ct_fetch(CS_TRUE)) {
-	    # push the results onto an array
-	    push(@$ret, {%data});
+	if(0) {
+	    while(%data = $self->ct_fetch(CS_TRUE)) {
+		# push the results onto an array
+		push(@$ret, {%data});
+	    }
+	} else {
+	    while(my $data = $self->ct_fetch(CS_TRUE, 1)) {
+		# push the results onto an array
+		push(@$ret, {%$data});
+	    }
 	}
     }
 
@@ -438,7 +497,9 @@ sub ExecSql {
 
     $self->cleanError;
 
-    $self->{SIMPLE}->{SQL} = $sql;
+    $self->{SIMPLE}->{SQL}       = $sql;
+    $self->{SIMPLE}->{STATUS}    = 0;
+    $self->{SIMPLE}->{ROW_COUNT} = 0;
 
     my $restype;
     my $row;
@@ -451,7 +512,8 @@ sub ExecSql {
     while(($ret = $self->ct_results($restype)) == CS_SUCCEED) {
 	if($restype == CS_CMD_FAIL) {
 	    if($self->{SIMPLE}->{CONFIG}->{DeadlockRetry} &&
-	      $self->{SIMPLE}->{ERROR} == 1205) {
+	       $self->{SIMPLE}->{ERROR} == 1205) 
+	    {
 		$self->ct_cancel(CS_CANCEL_ALL);
 		$err = 0;
 		$status = 0;
@@ -463,6 +525,9 @@ sub ExecSql {
 	    }
 	    ++$err;
 	}
+	if($restype == CS_CMD_DONE || $restype == CS_CMD_SUCCEED) {
+	    $self->{SIMPLE}->{ROW_COUNT} = $self->ct_res_info(&CS_ROW_COUNT);
+	}
 	next unless $self->ct_fetchable($restype);
 
 	if($restype == CS_STATUS_RESULT) {
@@ -471,6 +536,7 @@ sub ExecSql {
 		$self->ct_cancel(CS_CANCEL_ALL);
 		return 0;
 	    }
+	    $self->{SIMPLE}->{STATUS} = $status;
 	    while($row = $self->ct_fetch(0, 1)) {
 		;
 	    }
@@ -695,6 +761,12 @@ statement.
 If verbose warnings are turned on (ie if the B<-w> switch is passed to perl)
 then a warning is issued if rows are returned when executing $sql. In any
 case those rows are ignored.
+
+The status return code of the executed stored procedure, if any, is available 
+in $dbh->{SIMPLE}->{STATUS}.
+
+The number of rows of the B<last> statement executed by B<ExecSql> is
+available in $dbh->{SIMPLE}->{ROW_COUNT}.
 
 Returns 0 for any failure, non-0 otherwise.
 

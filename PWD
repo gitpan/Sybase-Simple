@@ -4,5 +4,5 @@
 # sure that everything works OK.
 
 PWD=
-SRV=
+SRV=troll
 UID=sa

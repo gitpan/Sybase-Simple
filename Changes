@@ -1,6 +1,11 @@
-$Id: Changes,v 1.4 2001/03/12 18:22:57 mpeppler Exp $
+$Id: Changes,v 1.5 2003/12/23 19:10:15 mpeppler Exp $
 
 Revision history extension Sybase::Simple
+
+0.56  Dec 23 2003
+        - Added ArrayRow().
+        - Added rowcount and status result information to ExecSql().
+        Various minor bug fixes.
 
 0.52  Mar 12 2001
         - Added ArrayOfArray().
